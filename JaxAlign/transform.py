@@ -1,7 +1,7 @@
 from jax import numpy as jnp
-import jax.scipy.interpolate as jinterp
 from collections import namedtuple
 from typing import Tuple, Iterable
+from .image import Image
 
 class Transform(Iterable):
     def __call__(self, _in):
@@ -42,26 +42,21 @@ class Affine(Transform, namedtuple("Affine", ['weight', 'bias'])):
     def __repr__(self):
         return f"Affine with bias: {self.bias} and weights: \n {self.weight}"
 
-class VectorField(Transform, namedtuple('VectorField', ['bias'])):
-    def __new__(cls, bias):
-        if isinstance(bias, (tuple, )):
-            bias = jnp.zeros((*bias, 3))
-        elif isinstance(bias, (jnp.ndarray)):
-            pass
+class VectorField(Transform, Image, ):
+    def __new__(cls, *args):
+        if len(args) > 1  and isinstance(args[0], tuple) and isinstance(args[1], tuple):
+            bias = jnp.zeros((*args[0], len(args[0])))
+            spacing = args[-1]
+        elif len(args) == 1 and isinstance(args[0], Image):
+            bias = args[0].img
+            spacing = args[0].spacing
         else:
-            raise TypeError("either pass a shape or an initialized jax array")
-        return super().__new__(cls, bias)
+            raise TypeError("either pass a shape and spacing or an initialized jalign Image")
+        print(bias, spacing)
+        return super().__new__(cls, bias, spacing)
 
-    def __init__(self, bias)
-        gridargs = tuple(
-            slice(-(half_width:=shape * step / 2), half_width, shape*1j)
-            for shape, step in zip(img.shape, spacing)
-        )
-        self._interpolator = jinterp.RegularGridInterpolator(
-            [ax.flatten() for ax in jnp.ogrid[*gridargs]],
-            self.bias,
-            fill_value=0.0
-        )
+    def __init__(self, *args):
+        super().__init__(self.img, self.spacing)
 
     def forward(self, grid):
-        return self._interpolator(grid)
+        return self.sample_at(grid) + grid
